@@ -18,6 +18,8 @@ streamlit==1.50.0             # 简易前端原型
 python-multipart==0.0.20      # 表单上传支持 (FastAPI)
 python-dotenv==1.0.1          # 环境变量加载
 pydantic==2.10.5              # 数据模型（FastAPI & internal）
+ddtrace>=2.9.0                # Datadog LLM Observability & APM
+requests>=2.31.0              # HTTP 客户端 (for Datadog logs API)
 
 # --- Optional / Recommended (暂未强制使用，可按需取消注释) ---
 # torch==2.7.1+cpu             # 未来: 深度视觉 / 事件检测
