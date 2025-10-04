@@ -15,12 +15,12 @@ from pydantic import BaseModel
 from typing import Optional, List
 from dotenv import load_dotenv
 
-# Unified imports (resolved): use relative paths, include search helpers
-from .frame_extractor import extract_frames_at_timestamp, format_frames_for_openai
-from .vlm import init_openai_client, query_vision_model
-from .prompts import VIDEO_QA_SYSTEM_PROMPT, VIDEO_QA_USER_TEMPLATE, USER_PROMPT_TEMPLATE
-from .router import is_search_question
-from .web_search import search_perplexity
+# Import local modules
+from frame_extractor import extract_frames_at_timestamp, format_frames_for_openai
+from vlm import query_vision_model
+from prompts import VIDEO_QA_SYSTEM_PROMPT, VIDEO_QA_USER_TEMPLATE
+from router import is_search_question
+from web_search import search_perplexity
 
 # Load environment variables
 load_dotenv()
@@ -53,10 +53,6 @@ async def startup_event():
     print(f"✓ Video path: {VIDEO_PATH}")
     if OPENAI_API_KEY:
         print("✓ OpenAI API key configured")
-        try:  # pragma: no cover
-            init_openai_client(OPENAI_API_KEY)
-        except Exception as e:
-            print(f"⚠ Vision client init failed: {e}")
     else:
         print("⚠ Warning: OPENAI_API_KEY not set")
 
