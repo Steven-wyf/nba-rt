@@ -168,8 +168,17 @@ if ask_clicked:
 
     # Additional metadata
     with st.expander("🔎 Details from AI"):
+        query_type = data.get("query_type", "N/A")
+        st.write("**Query Type:**", "🔍 Web Search" if query_type == "search" else "📹 Video Analysis")
         st.write("**Referenced Time Range:**", data.get("time_range", "N/A"))
         st.write("**Segment Summary:**", data.get("used_segment_summary", "N/A"))
+        
+        # 显示引用来源（Perplexity）
+        if citations := data.get("citations"):
+            st.write("**Sources:**")
+            for i, url in enumerate(citations[:5], 1):
+                st.markdown(f"{i}. [{url}]({url})")
+        
         if script_excerpt := data.get("used_script_excerpt"):
             st.write("**Script Excerpt:**", script_excerpt)
 

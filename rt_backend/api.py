@@ -12,12 +12,14 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from dotenv import load_dotenv
 
 from frame_extractor import extract_frames_at_timestamp, format_frames_for_openai
 from vlm import query_vision_model
 from prompts import VIDEO_QA_SYSTEM_PROMPT, VIDEO_QA_USER_TEMPLATE
+from router import is_search_question
+from web_search import search_perplexity
 
 # Load environment variables
 load_dotenv()
@@ -41,6 +43,7 @@ DEFAULT_VIDEO_PATH = os.path.join(PROJECT_ROOT, "data", "raw", "nba_domo.mov")
 
 VIDEO_PATH = os.getenv("VIDEO_PATH", DEFAULT_VIDEO_PATH)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 
 # Initialize on startup
 @app.on_event("startup")
@@ -51,6 +54,10 @@ async def startup_event():
         print(f"✓ OpenAI API key configured")
     else:
         print(f"⚠ Warning: OPENAI_API_KEY not set")
+    if PERPLEXITY_API_KEY:
+        print(f"✓ Perplexity API key configured")
+    else:
+        print(f"ℹ️  Perplexity not configured (optional)")
 
 
 # Request/Response models
@@ -64,6 +71,8 @@ class AskResponse(BaseModel):
     time_range: str
     used_segment_summary: str
     used_script_excerpt: Optional[str] = None
+    query_type: Optional[str] = None  # "video" or "search"
+    citations: Optional[List[str]] = None
 
 
 @app.get("/")
@@ -95,50 +104,63 @@ async def ask_question(request: AskRequest):
         if request.timestamp < 0:
             raise HTTPException(status_code=400, detail="Timestamp must be non-negative")
         
-        # Extract frames around timestamp
-        frames = extract_frames_at_timestamp(
-            video_path=VIDEO_PATH,
-            timestamp=request.timestamp,
-            num_frames_before=2,
-            num_frames_after=2,
-            frame_interval=1.0  # 1 second intervals
-        )
-        
-        if not frames:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Could not extract frames at timestamp {request.timestamp}s"
+        # 判断问题类型：搜索 or 视频分析
+        if is_search_question(request.question):
+            # 调用 Perplexity 搜索
+            context = f"User is watching NBA game at {request.timestamp:.1f}s"
+            result = search_perplexity(request.question, context)
+            
+            return AskResponse(
+                answer=result["content"],
+                time_range=f"{request.timestamp:.1f}",
+                used_segment_summary="Retrieved from web search",
+                used_script_excerpt=None,
+                query_type="search",
+                citations=result.get("citations", [])
             )
         
-        # Calculate time range
-        time_start = frames[0][0]
-        time_end = frames[-1][0]
-        time_range_str = f"{time_start:.1f}-{time_end:.1f}"
-        
-        # Format frames for OpenAI
-        image_contents = format_frames_for_openai(frames)
-        
-        # Construct user prompt
-        user_prompt = VIDEO_QA_USER_TEMPLATE.format(
-            question=request.question,
-            time_start=time_start,
-            time_end=time_end
-        )
-        
-        # Query OpenAI Vision model
-        answer = query_vision_model(
-            system_prompt=VIDEO_QA_SYSTEM_PROMPT,
-            user_text=user_prompt,
-            image_contents=image_contents
-        )
-        
-        # Construct response
-        return AskResponse(
-            answer=answer,
-            time_range=time_range_str,
-            used_segment_summary=f"Analyzed {len(frames)} frames from {time_range_str}s",
-            used_script_excerpt=None  # Will be populated when script generation is implemented
-        )
+        else:
+            # 视频分析（原有逻辑）
+            frames = extract_frames_at_timestamp(
+                video_path=VIDEO_PATH,
+                timestamp=request.timestamp,
+                num_frames_before=2,
+                num_frames_after=2,
+                frame_interval=1.0
+            )
+            
+            if not frames:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Could not extract frames at timestamp {request.timestamp}s"
+                )
+            
+            time_start = frames[0][0]
+            time_end = frames[-1][0]
+            time_range_str = f"{time_start:.1f}-{time_end:.1f}"
+            
+            image_contents = format_frames_for_openai(frames)
+            
+            user_prompt = VIDEO_QA_USER_TEMPLATE.format(
+                question=request.question,
+                time_start=time_start,
+                time_end=time_end
+            )
+            
+            answer = query_vision_model(
+                system_prompt=VIDEO_QA_SYSTEM_PROMPT,
+                user_text=user_prompt,
+                image_contents=image_contents
+            )
+            
+            return AskResponse(
+                answer=answer,
+                time_range=time_range_str,
+                used_segment_summary=f"Analyzed {len(frames)} frames from {time_range_str}s",
+                used_script_excerpt=None,
+                query_type="video",
+                citations=None
+            )
     
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
