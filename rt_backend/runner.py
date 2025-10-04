@@ -255,6 +255,7 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
 	p.add_argument("--no-tts-autoplay", action="store_true", help="仅生成音频文件不本地播放")
 	p.add_argument("--tts-early-chars", type=int, default=0, help="流式模式下第二行累计达到该字符数立即启动早期 TTS (0 关闭)")
 	p.add_argument("--tts-debug", action="store_true", help="打印 TTS 播放相关调试信息 (检测 /dev/snd 等)")
+	p.add_argument("--live-log", type=str, default="", help="将每次 commentary 追加写入 NDJSON 文件 (用于前端轮询)")
 	return p.parse_args(list(argv) if argv is not None else None)
 
 
@@ -471,11 +472,19 @@ def run_realtime_commentary(args: argparse.Namespace) -> None:
 	tempo = TempoController(WindowConfig(target_interval_s=args.interval, max_window_frames=args.window_frames))
 	vlm = VLMClient(VLMConfig(max_frames=6))
 	tts_client: Optional[TTSClient] = None
+	# 收集当前 commentary 期间生成的音频文件路径
+	audio_batch: list[str] = []
 	if args.tts:
 		cfg = TTSConfig()
 		if args.no_tts_autoplay:
 			cfg.autoplay = False
-		tts_client = TTSClient(cfg)
+		def _on_audio(path: Path):  # noqa: ANN001
+			# 仅记录文件名，前端通过 /tts/file?name= 访问
+			try:
+				audio_batch.append(Path(path).name)
+			except Exception:
+				pass
+		tts_client = TTSClient(cfg, on_audio=_on_audio)
 	prompt_builder = PromptBuilder()
 	ctx = PromptContext(summary="", last_output="")
 
@@ -597,12 +606,11 @@ def run_realtime_commentary(args: argparse.Namespace) -> None:
 				ctx.score = f"{m2.group(1)}-{m2.group(2)}"
 		if not args.stream:
 			print(f"[commentary] {commentary}")
-		# 提取第二行做 TTS
+		# 提取第二行做 TTS（若早期已触发，仍再合成一次可能导致重复；后续可做去重）
 		if tts_client is not None:
 			lines = commentary.splitlines()
 			if len(lines) >= 2:
 				second = lines[1].strip()
-				# 过滤太短 / 纯比分行
 				if len(second) > 4:
 					tts_client.enqueue(second)
 		print(f"[latency] model_call={latency*1000:.1f} ms window={len(frames_batch)} frames interval={tempo.cfg.target_interval_s:.2f}s")
@@ -624,6 +632,23 @@ def run_realtime_commentary(args: argparse.Namespace) -> None:
 				if abs(new_interval - current) > 1e-3:
 					tempo.cfg.target_interval_s = new_interval
 					print(f"[adaptive] adjust interval {current:.2f} -> {new_interval:.2f} (latency_avg={latency_mavg*1000:.1f}ms)")
+		# 若开启 live-log, 追加写入 NDJSON
+		if args.live_log:
+			try:
+				import json as _json
+				log_entry = {
+					"ts": current_ts,
+					"wall_time": time.time(),
+					"text": commentary,
+					"score": ctx.score,
+					"audio": list(audio_batch) if audio_batch else [],
+				}
+				with open(args.live_log, "a", encoding="utf-8") as lf:
+					lf.write(_json.dumps(log_entry, ensure_ascii=False) + "\n")
+			except Exception as _e:  # noqa: BLE001
+				print(f"[live-log][warn] 写入失败: {_e}")
+			finally:
+				audio_batch.clear()
 		# 更新上次触发时间
 		nonlocal last_fire_wall
 		last_fire_wall = time.time()

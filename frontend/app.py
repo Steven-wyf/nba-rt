@@ -2,6 +2,10 @@ import os
 import json
 import requests
 import streamlit as st
+import time
+
+LIVE_STATUS_ENDPOINT = os.environ.get("LIVE_STATUS_ENDPOINT", os.environ.get("BACKEND_URL", "http://localhost:8001") + "/live/status")
+TTS_FILE_ENDPOINT = os.environ.get("TTS_FILE_ENDPOINT", os.environ.get("BACKEND_URL", "http://localhost:8001") + "/tts/file")
 
 # """
 # NBA AI Commentary Front-End (Streamlit)
@@ -71,6 +75,8 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 st.sidebar.title("⚙️ Settings")
 
 ai_commentary = st.sidebar.toggle("Enable AI Commentary Track", value=False)
+auto_refresh = st.sidebar.toggle("Auto Refresh Live Feed", value=False)
+refresh_interval = st.sidebar.slider("Refresh Interval (s)", 0.5, 5.0, 1.5, 0.5)
 
 audio_status = "on" if ai_commentary else "off"
 st.sidebar.caption(f"AI commentary track is {audio_status}")
@@ -183,5 +189,82 @@ if ask_clicked:
             st.write("**Script Excerpt:**", script_excerpt)
 
 # ----------------------------  Footer  ----------------------------------
+st.markdown("### Live Commentary (Realtime)")
+live_container = st.empty()
+
+def fetch_live():
+    try:
+        r = requests.get(LIVE_STATUS_ENDPOINT, params={"limit": 20}, timeout=5)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        return {"error": str(e), "items": []}
+
+def render_live(data):
+    if not data or not data.get("items"):
+        live_container.info("No live commentary yet. Start the runner with --live-log.")
+        return
+    items = data["items"]
+    md_lines = []
+    for it in items:
+        ts = it.get("ts")
+        txt = it.get("text", "")
+        score = it.get("score", "?")
+        audio_files = it.get("audio") or []
+        header = f"**t={ts:.1f}s | Score {score}**" if ts is not None else f"**Score {score}**"
+        md_lines.append(header + "\n" + txt)
+        # 简单内联音频（仅显示第一个，避免堆积）
+        if ai_commentary and audio_files:
+            name = audio_files[-1]
+            audio_url = f"{TTS_FILE_ENDPOINT}?name={name}"
+            md_lines.append(f"<audio controls {'autoplay' if ai_commentary else ''} src='{audio_url}'></audio>")
+        md_lines.append("---")
+    live_container.markdown("\n".join(md_lines), unsafe_allow_html=True)
+
+if st.button("Refresh Live Commentary"):
+    render_live(fetch_live())
+
+if auto_refresh:
+    # 简单轮询机制
+    last_time = time.time()
+    render_live(fetch_live())
+    while auto_refresh and time.time() - last_time < 60:  # 60s loop safeguard (Streamlit rerun model)
+        time.sleep(refresh_interval)
+        render_live(fetch_live())
+        # 触发 Streamlit rerun
+        st.experimental_rerun()
+
+# ----------------------------  Transcript View  ------------------
+st.markdown("### Live Transcript")
+with st.expander("Show Full Transcript", expanded=True):
+    transcript_limit = st.slider("Max entries", 20, 300, 120, 10, key="transcript_limit")
+    show_score = st.checkbox("Show score line", value=True, key="tx_show_score")
+    compact = st.checkbox("Compact (only commentary line)", value=False, key="tx_compact")
+    data_tx = fetch_live()
+    if data_tx.get("items"):
+        # items 已按 wall_time 降序 -> 反转让最旧在上，阅读更自然
+        ordered = list(reversed(data_tx["items"]))[:transcript_limit]
+        lines = []
+        for it in ordered:
+            raw_text = it.get("text", "")
+            if not raw_text:
+                continue
+            parts = raw_text.splitlines()
+            line1 = parts[0] if parts else ""
+            line2 = parts[1] if len(parts) > 1 else ""
+            ts = it.get("ts")
+            # 提取 mm:ss 信息（已经在第一行中）
+            if compact:
+                core = line2 or line1
+            else:
+                if show_score:
+                    core = f"{line1}\n{line2}" if line2 else line1
+                else:
+                    core = line2 or line1
+            lines.append(core)
+        st.text("\n\n".join(lines))
+    else:
+        st.info("No transcript yet. Ensure runner started with --live-log.")
+
 st.markdown("---")
 st.caption("© 2025 NBA AI Commentator Demo – Built with Streamlit")

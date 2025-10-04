@@ -88,6 +88,19 @@ class TTSListResponse(BaseModel):
     items: List[TTSListItem]
 
 
+class LiveItem(BaseModel):
+    ts: float
+    wall_time: float
+    text: str
+    score: Optional[str] = None
+    audio: Optional[List[str]] = None
+
+
+class LiveStatusResponse(BaseModel):
+    count: int
+    items: List[LiveItem]
+
+
 @app.get("/")
 async def root():
     """Health check endpoint."""
@@ -120,6 +133,47 @@ async def list_tts(limit: int = Query(10, ge=1, le=100)):
     entries.sort(key=lambda x: x[0], reverse=True)
     items = [TTSListItem(filename=n, mtime=mt, size=sz) for mt, n, sz in entries[:limit]]
     return TTSListResponse(count=len(items), items=items)
+
+
+@app.get("/tts/file")
+async def tts_file(name: str):
+    """Serve a single TTS audio file by filename (for <audio src>)."""
+    from fastapi.responses import FileResponse
+    cache_dir = os.path.join(PROJECT_ROOT, "data", "cache", "tts")
+    fp = os.path.join(cache_dir, name)
+    if not os.path.isfile(fp):
+        raise HTTPException(status_code=404, detail="file not found")
+    return FileResponse(fp)
+
+
+@app.get("/live/status", response_model=LiveStatusResponse)
+async def live_status(limit: int = Query(20, ge=1, le=200)):
+    """Return latest live commentary entries written by runner --live-log.
+
+    The runner appends NDJSON lines with keys: ts, wall_time, text, score, audio.
+    """
+    log_path = os.getenv("LIVE_LOG_PATH", os.path.join(PROJECT_ROOT, "data", "cache", "live_commentary.ndjson"))
+    if not os.path.exists(log_path):
+        return LiveStatusResponse(count=0, items=[])
+    items: List[LiveItem] = []
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()[-limit:]
+        import json as _json
+        for ln in lines:
+            ln = ln.strip()
+            if not ln:
+                continue
+            try:
+                obj = _json.loads(ln)
+                items.append(LiveItem(**obj))
+            except Exception:
+                continue
+        # 按 wall_time 降序
+        items.sort(key=lambda x: x.wall_time, reverse=True)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"read live log failed: {e}")
+    return LiveStatusResponse(count=len(items), items=items)
 
 
 @app.post("/ask", response_model=AskResponse)
