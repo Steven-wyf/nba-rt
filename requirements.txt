@@ -1,0 +1,16 @@
+# Core web framework
+streamlit==1.50.0
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# OpenAI API
+openai==1.59.5
+
+# Video processing
+opencv-python==4.10.0.84
+
+# Utilities
+python-multipart==0.0.20
+pydantic==2.10.5
+python-dotenv==1.0.1
+

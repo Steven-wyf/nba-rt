@@ -25,7 +25,7 @@ st.set_page_config(
 
 # ----------------------------  Constants  -------------------------------
 VIDEO_PATH = os.path.join("data", "raw", "nba_domo.mov")
-BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8001")
 ASK_ENDPOINT = f"{BACKEND_URL}/ask"
 
 # ----------------------------  Styling  ---------------------------------
