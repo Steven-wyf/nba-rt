@@ -3,17 +3,17 @@ import json
 import requests
 import streamlit as st
 
-"""
-NBA AI Commentary Front-End (Streamlit)
---------------------------------------
-A minimal yet polished web UI that allows users to:
-1. Watch a demo NBA video with optional AI-generated commentary.
-2. Pause at any time and ask the AI questions about the current play.
+# """
+# NBA AI Commentary Front-End (Streamlit)
+# --------------------------------------
+# A minimal yet polished web UI that allows users to:
+# 1. Watch a demo NBA video with optional AI-generated commentary.
+# 2. Pause at any time and ask the AI questions about the current play.
 
-The backend is expected to expose a POST /ask endpoint that accepts
-    {"question": str, "timestamp": float}
-and returns the contract described in the High-Level Design.
-"""
+# The backend is expected to expose a POST /ask endpoint that accepts
+#     {"question": str, "timestamp": float}
+# and returns the contract described in the High-Level Design.
+# """
 
 # ----------------------------  Page Config  -----------------------------
 st.set_page_config(

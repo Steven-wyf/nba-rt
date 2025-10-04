@@ -16,8 +16,8 @@ from typing import Optional
 from dotenv import load_dotenv
 
 from frame_extractor import extract_frames_at_timestamp, format_frames_for_openai
-from vlm import init_openai_client, query_vision_model
-from prompts import VIDEO_QA_SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
+from vlm import query_vision_model
+from prompts import VIDEO_QA_SYSTEM_PROMPT, VIDEO_QA_USER_TEMPLATE
 
 # Load environment variables
 load_dotenv()
@@ -42,15 +42,15 @@ DEFAULT_VIDEO_PATH = os.path.join(PROJECT_ROOT, "data", "raw", "nba_domo.mov")
 VIDEO_PATH = os.getenv("VIDEO_PATH", DEFAULT_VIDEO_PATH)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Initialize OpenAI client on startup
+# Initialize on startup
 @app.on_event("startup")
 async def startup_event():
-    try:
-        init_openai_client(OPENAI_API_KEY)
-        print(f"✓ OpenAI client initialized")
-        print(f"✓ Video path: {VIDEO_PATH}")
-    except Exception as e:
-        print(f"⚠ Warning: {e}")
+    print(f"✓ NBA AI Commentary API started")
+    print(f"✓ Video path: {VIDEO_PATH}")
+    if OPENAI_API_KEY:
+        print(f"✓ OpenAI API key configured")
+    else:
+        print(f"⚠ Warning: OPENAI_API_KEY not set")
 
 
 # Request/Response models
@@ -119,7 +119,7 @@ async def ask_question(request: AskRequest):
         image_contents = format_frames_for_openai(frames)
         
         # Construct user prompt
-        user_prompt = USER_PROMPT_TEMPLATE.format(
+        user_prompt = VIDEO_QA_USER_TEMPLATE.format(
             question=request.question,
             time_start=time_start,
             time_end=time_end
