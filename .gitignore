@@ -38,3 +38,17 @@ wheels/
 # Environment
 .env
 .env.local
+
+# Streamlit
+.streamlit/
+
+# Logs
+*.log
+/tmp/
+
+# Frontend specific
+frontend/.streamlit/
+frontend/__pycache__/
+
+# Backend specific  
+rt_backend/__pycache__/
