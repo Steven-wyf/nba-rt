@@ -1,16 +1,37 @@
-# Core web framework
-streamlit==1.50.0
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
+############################################################
+# Merged requirements (resolved conflict)
+# - Includes web API stack (FastAPI/uvicorn/streamlit) from other branch
+# - Includes vision/OCR + commentary runtime stack
+# - All versions pinned; adjust cautiously.
+############################################################
 
-# OpenAI API
-openai==1.59.5
+# --- Core runtime (commentary / vision) ---
+opencv-python==4.12.0.88      # 视频解码/抽帧 (保留较新版本)
+numpy==2.2.6                  # 数组/图像处理
+openai==2.1.0                 # 新版 OpenAI SDK (与当前代码适配)
+pytesseract==0.3.13           # OCR 比分识别
 
-# Video processing
-opencv-python==4.10.0.84
+# --- Web / API / Frontend ---
+fastapi==0.115.6              # 后端 API 服务
+uvicorn[standard]==0.34.0     # ASGI 服务器
+streamlit==1.50.0             # 简易前端原型
+python-multipart==0.0.20      # 表单上传支持 (FastAPI)
+python-dotenv==1.0.1          # 环境变量加载
+pydantic==2.10.5              # 数据模型（FastAPI & internal）
 
-# Utilities
-python-multipart==0.0.20
-pydantic==2.10.5
-python-dotenv==1.0.1
+# --- Optional / Recommended (暂未强制使用，可按需取消注释) ---
+# torch==2.7.1+cpu             # 未来: 深度视觉 / 事件检测
+# scikit-learn==1.7.0          # 未来: 简单分类/聚类
+# pandas==2.3.1                # 未来: 统计分析
+# matplotlib==3.10.3           # 未来: 可视化调试
 
+# --- Dev / Notebook (可拆分到 dev-requirements.txt) ---
+# jupyterlab==4.4.4
+# ipykernel==6.29.5
+# seaborn==0.13.2
+
+############################################################
+# 安装:
+#   pip install -r requirements.txt
+# 若需要可选组件，取消注释后再安装
+############################################################
