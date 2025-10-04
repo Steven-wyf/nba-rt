@@ -68,7 +68,12 @@ class VLMClient:
 		return "frames=" + ", ".join(sigs) + (f" | coarse_actions: {actions}" if actions else "")
 
 
-__all__ = ["VLMClient", "VLMConfig"]
+def init_openai_client(api_key: str | None = None):  # compatibility shim for api.py
+	# In merged architecture, vision querying lazily initializes inside query_vision_model.
+	# We keep this no-op so the FastAPI startup hook doesn't fail.
+	return None
+
+__all__ = ["VLMClient", "VLMConfig", "init_openai_client", "query_vision_model"]
 
 # Optional real vision API helper (from merged branch) -----------------------
 try:  # Lazy import; only if user wants to call real vision model externally

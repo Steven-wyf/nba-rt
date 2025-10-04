@@ -42,13 +42,14 @@ class TTSConfig:
 
 
 class TTSClient:
-	def __init__(self, cfg: Optional[TTSConfig] = None):
+	def __init__(self, cfg: Optional[TTSConfig] = None, *, on_audio=None):
 		self.cfg = cfg or TTSConfig()
 		self._q: "Queue[str]" = Queue()
 		self._stop = threading.Event()
 		self._worker = threading.Thread(target=self._run, daemon=True)
 		self.cache_dir = Path("data/cache/tts")
 		self.cache_dir.mkdir(parents=True, exist_ok=True)
+		self._on_audio = on_audio  # callback(Path)
 		self._worker.start()
 
 	# --------------------------- Public API --------------------------- #
@@ -88,6 +89,13 @@ class TTSClient:
 				break
 			try:
 				audio_path = self._synthesize(item)
+				if audio_path is not None and self._on_audio is not None:
+					try:
+						self._on_audio(audio_path)
+					except Exception as _cb_err:  # noqa: PIE786
+						print(f"[tts][on_audio-error] {_cb_err}")
+						pass
+					
 				if self.cfg.autoplay and audio_path is not None:
 					self._play(audio_path)
 			except Exception as e:  # noqa: PIE786

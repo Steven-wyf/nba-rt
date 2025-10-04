@@ -272,24 +272,25 @@ def _openai_commentary(system: str, user: str, model: str = "gpt-4o-mini", *, de
 	if not api_key:
 		raise RuntimeError("缺少环境变量 OPENAI_API_KEY")
 
-	# 调试：检测潜在导致 header ASCII 编码失败的环境变量（HTTP 头必须 ASCII）
-	if debug:
-		def _non_ascii(s: str) -> bool:
-			return any(ord(c) > 127 for c in s)
-		suspects: dict[str, str] = {}
-		for k, v in os.environ.items():
-			if k.startswith("OPENAI") and isinstance(v, str) and _non_ascii(v):
+	# 始终进行非 ASCII 头部安全清理（避免 ascii 编码异常）
+	def _non_ascii(s: str) -> bool:
+		return any(ord(c) > 127 for c in s)
+	suspects: dict[str, str] = {}
+	for k, v in list(os.environ.items()):
+		if k.startswith("OPENAI") and isinstance(v, str) and _non_ascii(v):
+			if k != "OPENAI_API_KEY":  # 保留真正的 key
 				suspects[k] = v
-		if suspects:
-			print("[openai-debug] 检测到包含非 ASCII 的 OPENAI_* 变量，可能导致 httpx header 编码失败:")
-			for k, v in suspects.items():
-				preview = v[:40] + ("..." if len(v) > 40 else "")
-				print(f"  {k} = {preview}")
-			print("[openai-debug] 将在本次调用前临时移除这些变量 (除 API KEY)。")
-			# 移除除 OPENAI_API_KEY 以外的嫌疑变量
-			for k in suspects.keys():
-				if k != "OPENAI_API_KEY":
-					os.environ.pop(k, None)
+	if suspects:
+		print("[openai-sanitize] 移除含非 ASCII 的环境变量以避免 httpx header 错误:")
+		for k, v in suspects.items():
+			preview = v[:40] + ("..." if len(v) > 40 else "")
+			print(f"  {k} = {preview}")
+		for k in suspects.keys():
+			os.environ.pop(k, None)
+
+	# 确保 UTF-8 相关环境，减少编码问题
+	for _k, _v in ("PYTHONIOENCODING", "utf-8"), ("LANG", "C.UTF-8"), ("LC_ALL", "C.UTF-8"):
+		os.environ.setdefault(_k, _v)
 
 	# 简单别名映射（仅限 gpt-4-mini -> gpt-4o-mini）。用户之前要求 gpt-5 不做映射，这里保持范围最小。
 	alias_map = {

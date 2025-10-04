@@ -79,9 +79,13 @@ VIDEO_QA_USER_TEMPLATE = (
 	"Question: {question}\n\nContext: These frames are from approximately {time_start:.1f}s to {time_end:.1f}s of the game.\n\n"
 	"Answer strictly based on what is visible." )
 
+# Backward compatibility alias (api.py expects USER_PROMPT_TEMPLATE)
+USER_PROMPT_TEMPLATE = VIDEO_QA_USER_TEMPLATE
+
 __all__ = [
 	"PromptBuilder",
 	"PromptContext",
 	"VIDEO_QA_SYSTEM_PROMPT",
-	"VIDEO_QA_USER_TEMPLATE",
+    "VIDEO_QA_USER_TEMPLATE",
+    "USER_PROMPT_TEMPLATE",
 ]
